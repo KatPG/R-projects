@@ -1,0 +1,362 @@
+---
+title: "Cyclistic - Empresa de bicicletas compartidas"
+author: "KatherineParra"
+date: "2 de enero de 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+```
+## Escenario
+
+Cyclistic es una empresa de bicicletas compartidas de Chicago y su directora de marketing considera que el éxito futuro de la empresa depende de maximizar la cantidad de membresías anuales. Por lo tanto, el equipo de análistas, del que haces parte, quiere entender las diferencias que existen en el uso de las bicicletas entre los ciclistas ocasionales y los miembros anuales, para diseñar una nueva estrategia de marketing que permita convertir a los ciclistas ocasionales en miembros anuales. 
+
+### Tarea de negocio
+
+Encontrar información sobre las diferencias en el comportamiento entre los miembros anuales y los clientes ocasionales de clyclistic, para hacer recomendaciones que ayuden al equipo a diseñar estrategias de marketing destinadas a convertir a los ciclistas ocasionales en miembros anuales. 
+Presentar los conocimientos y las recomendaciones en visualizaciones convincentes que describan de manera efectiva los datos y cómo se llegó a esas conclusiones.
+
+### Fuentes de datos
+
+Datos históricos de recorridos de Cyclistic (Últimos 12 meses) proporcionados por Motivate International Inc. 
+    
+     https://divvy-tripdata.s3.amazonaws.com/index.html
+       (Datos empleados de Diciembre de 2021 a Noviembre de 2022)
+     
+     https://ride.divvybikes.com/data-license-agreement
+       (Licencia para utilizar los datos proporcionados por Motivate International Inc.)
+       
+Nota: Los conjuntos de datos tienen un nombre diferente porque Cyclistic es una empresa ficticia. A los fines de este caso práctico, los conjuntos de datos son apropiados y permitirÃ¡n responder las preguntas de la empresa.
+
+#### Descripción
+
+La data esta compuesta por 12 archivos en formato .csv que corresponden a los información mensual de Cyclistic de Diciembre de 2021 a Noviembre de 2022.
+
+Cada archivo contiene información relativa a:
+
+     Tipo de bicicleta
+     Marca de tiempo de inicio de viaje, nombre de la estaación y coordenadas
+     Marca de timepo de finalización de viaje, nombre de la estación y coordenadas
+     Tipo de usuario
+
+
+## Análisis exploratorio datos usuarios Cyclist
+
+### 1. Importar librerias y archivos .csv
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+trips_data <-list.files(path = 'C:/Users/kther/OneDrive/Documentos/kath/DataAnalysis/Google_DataAnalytics/CasoPractico1') %>%
+  lapply(read_csv, show_col_types = FALSE) %>%
+  bind_rows
+```
+
+### 2. Inspección de la data
+
+```{r}
+str(trips_data)
+
+sample(trips_data)
+
+#### Conteo de Valores unicos en la data para cada variable:
+sapply(trips_data,function(x) n_distinct(x) )
+
+#### Conteo de Valores nulos en la data para cada variable:
+sapply(trips_data,function(x)sum(is.na(x)))
+
+```
+Una vez inspeccionada la data, encontramos que gran parte de los valores nulos corresponden al id y nombre de la estaciones tanto de inico como de finalización de viaje, seguidos por las coordenadas de finalización del viaje, las cuales se deduce no estÃ¡n vinculadas en su totalidad con la ubicación de las estaciones.
+
+El archivo generado con la union de los archivos .csv presenta 1 columna y 816 filas con valores nulos.
+ 
+### 3. Limpieza de la data
+Para la preparación de la data se procede a modificar el nombre de las variables 'rideable_type' y 'member_casual' para facilitar su lectura, se seleccionan las variables de interés de acuerdo al alcance del proyecto y se procede a asignar 'unknown' al nombre de las estaciones con valores nulos para conservar la información referente a la marca de tiempo de inicio y finalziaciÃ³n del viaje.
+
+```{r}
+
+#Cambio de nombre de las variables 'rideable_type' y 'member_casual' 
+trips_data_v2 <-trips_data %>%
+  rename(bike_type =rideable_type, customer_type= member_casual)
+
+#Selección de variables de interés para el alcance del proyecto
+trips_data_v2 <- trips_data_v2 %>%
+  select(bike_type, started_at, ended_at, start_station_name, end_station_name, customer_type)
+sample(trips_data_v2)
+
+#Asignación de 'unknown' a los valores nulos en el nombre de la estación de incio y finalización del viaje.
+trips_data_v2$start_station_name[is.na(trips_data_v2$start_station_name)]<- "Unknown"
+trips_data_v2$end_station_name[is.na(trips_data_v2$end_station_name)]<- "Unknown"
+
+
+#Conteo de valores nulos por variable posterior a las modificaciones realizadas
+sapply(trips_data_v2, function(x) sum(is.na(x)))
+
+#Eliminación de observaciones sin información incluidas en el fichero.
+trips_data_v2 <- na.omit(trips_data_v2)
+```
+
+### 4. Cálculos adicionales
+
+Se incorporan las variables de tiempo: 'date', 'month','weekday' y 'hour' para realizar el análisis en diferentes grados de granularidad y se omiten de la data las observaciones con irreguralidades en la duración del viaje, valores negativos o igual cero.
+
+```{r}
+#Creación de las variables adicionales: 'trip_length', 'month','weekday' y 'hour'
+trips_data_v2 <- trips_data_v2 %>%
+  mutate(trip_length = ended_at - started_at, date = as.Date(started_at),month=(format(as.Date(started_at), "%m")), week_day = wday(started_at), hour = format(as.POSIXct(started_at),format='%H'))
+
+#Cambio de unidades de 'trip_length' de segundos a minutos, redondeado a 1 decimal.
+str(trips_data_v2$trip_length)
+trips_data_v2$trip_length <- round(as.numeric(trips_data_v2$trip_length)/60,1)
+
+#Inspección de valores irregulares en la duración del viaje, valores negativos o igual a cero
+sum(trips_data_v2$trip_length <= 0)
+
+#Eliminación de observaciones con tiempo de viaje negativo o igual a cero
+trips_data_v2 <- trips_data_v2[trips_data_v2$trip_length >= 1,]
+```
+
+### 5. Análisis de la data
+
+A partir del análisis descriptivo de la duración de los viajes, se puede evidenciar la presencia de valores atípicos que afectan el valor de la media en comparación con la mediana.
+```{r}
+#Análisis descriptivo de la duración de los viajes
+
+summary(trips_data_v2$trip_length)
+ggplot(trips_data_v2)+
+  geom_boxplot(aes(x=customer_type, y= trip_length))+
+  coord_flip()
+
+```
+
+### Remoción de valores atípicos
+
+Para el tratamiento de los valores atípicos, se plantea la determinaciÃ³n del límite superior de la duración de los viajes a partir el cÃ¡lculo del rango intercuartílico (IQR). Se descartan los viajes con duración superior a: mediana + 1.5IQR.
+
+```{r}
+#límite superior
+upper_bound = median(trips_data_v2$trip_length) + 1.5*IQR(trips_data_v2$trip_length)
+
+#Filtro del dataset de acuerdo a límite superior calculado
+trips_data_v2 <- trips_data_v2 %>%
+  filter(trip_length <= upper_bound)
+```
+
+### Exploración de la data
+
+Para el análisis exploratorio de los datos se realizó el análisis desrciptivo de la duración de los viajes y la distribución de los mismos a distintos niveles de granularidad, a saber: fecha, mes, día de la semana y hora. A su vez, se incluyó la determinación de la preferecnia respecto del tipo de vehiculo asi como las estaciones con mayor afluencia de usuarios casuales tanto al inicio como al final del viaje, a fin de incluirlas en el target para las futuras campaÃ±as de marketing.
+
+#### Análisis descriptivo de la duración de viajes
+```{r}
+stats_data <- trips_data_v2 %>% 
+  group_by(customer_type) %>% 
+  summarise(min = min(trip_length), median = median(trip_length), mean = mean(trip_length), max = max(trip_length))
+stats_data
+```
+#### Viajes por Fecha
+Distribución del número de viajes realizados por fecha por tipo de usuario
+```{r}
+options(dplyr.summarise.inform = FALSE)
+daily_data <- trips_data_v2 %>%
+  group_by(date, customer_type) %>%
+  summarise(number_of_trips =n(), average_duration=mean(trip_length))
+daily_data
+```
+
+#### Viajes por Mes
+Distribución del nÃºmero de viajes realizados al mes por tipo de usuario:
+```{r}
+options(dplyr.summarise.inform = FALSE)
+month_data <- trips_data_v2 %>%
+  group_by(month, customer_type) %>%
+  summarise(number_of_trips =n(), average_duration=mean(trip_length))
+month_data
+```
+
+#### Viajes por día de la semana
+Distribución del número de viajes realizados por día de la semana por tipo de usuario:
+```{r}
+weekday_data <- trips_data_v2 %>% 
+  group_by(week_day, customer_type) %>%
+  summarise(number_of_trips = n(), average_duration = mean(trip_length))
+weekday_data
+```
+
+#### Preferencia de vehículo
+Distribución de la preferencia de vehículos según el tipo de usuario:
+```{r}
+bike_preferences <- trips_data_v2 %>%
+  group_by(bike_type, customer_type) %>%
+  summarise(number_of_trips = n())
+bike_preferences
+```
+#### Preferencias Hora de viaje
+Distribución del número de viajes realizado por hora por tipo de usuario
+```{r}
+hour_trip <- trips_data_v2 %>%
+  group_by(hour, customer_type) %>%
+  summarise(number_of_trips = n()) 
+hour_trip
+```
+#### Top estaciones más visitadas por miembros casuales
+Determinación de las 5 estaciones más visitados por usuarios casuales:
+
+##### Inicio de viaje
+
+```{r}
+top_start_station <- trips_data_v2 %>% 
+  filter(customer_type == "casual") %>%
+  filter(start_station_name != 'Unknown') %>%
+  group_by(start_station_name) %>%
+  summarise(number_of_visits = n()) %>%
+  arrange(-number_of_visits) %>%
+  head(5)
+
+top_start_station
+```
+##### Final de viaje
+
+```{r}
+top_end_station <- trips_data_v2 %>%
+  filter(customer_type == "casual") %>%
+  filter(end_station_name != "Unknown") %>%
+  group_by(end_station_name) %>%
+  summarise(number_of_visits = n()) %>%
+  arrange(-number_of_visits) %>%
+  head(5)
+
+top_end_station
+
+```
+### 6. Visualización de datos
+A partir de las métricas calculadas, se procede a realizar visualizaciones que faciliten el proceso de análisis e interpretación de los datos y permita obtener informaciÃ³n sobre el comportamiento de los usuarios para respaldar el diseÃ±o de la campaÃ±a de marketing que busca convertir a los usuarios casuales en miembros de Cyclistic.
+
+#### Gráfico proporción del número de viajes realizados en total por tipo de usuario
+
+```{r}
+
+  ggplot(data = trips_data_v2)+
+  geom_bar(mapping = aes(x=customer_type, y=(..prop..),group=1) ) +
+  labs(title = 'Ratio Trips by Customer Type', x= NULL, y = 'Ratio')+
+  theme_light()
+```
+
+#### Gráfico de la duracion del viaje según el tipo de cliente
+
+```{r}
+trips_data_v2 %>% ggplot(aes(x=trip_length, fill=customer_type)) + 
+  geom_histogram(binwidth = 4, show.legend=FALSE) +
+  labs(title="Trip Duration Distribution", x="trip duration (in minutes)",
+       y="Number of trips") +
+  facet_wrap(~customer_type) +
+  theme_light()+
+  scale_x_continuous(breaks = seq(0,30, by=5))
+```
+
+#### Gráfico duración promedio de viajes por tipo de usuario
+
+```{r}
+stats_data %>% ggplot(aes(x=customer_type, y=mean, fill=customer_type)) +
+  geom_col(position="dodge", show.legend=FALSE) +
+  theme_light()+
+  labs(title="Average Trip Duration by Customer Type",
+       x=NULL,y="average trip duration (minutes)")
+```
+
+#### Gráfico Número de trayectos por fecha y tipo de usuario
+
+```{r}
+daily_data %>% ggplot(aes(x=date, y= number_of_trips, color = customer_type))+
+  geom_point()+
+  scale_x_date(date_labels = '%m-%y', breaks = '1 month')+
+  labs(title = 'Daily Trips by Customer Type', x=NULL, y='Number of trips', fill ="Customer type")+
+  theme_light()
+```
+#### Gráfico Número de trayectos por fecha y tipo de usuario
+```{r}
+month_data %>% ggplot(aes(x=month, y= number_of_trips/1000, color = customer_type))+
+  geom_line(aes(group = customer_type))+
+  geom_point(aes(color=customer_type))+
+  scale_y_continuous(label = function(x) paste0(x,'K'))+
+  labs(title = 'Daily Trips by Customer Type', x='Month', y='Number of trips', color ="Customer type")+
+  theme_light()
+
+```
+
+#### Gráfico Número de trayectos por día de la semana y tipo de usuario
+
+```{r}
+weekday_data %>% ggplot(aes(x=week_day, y= number_of_trips/1000, fill=customer_type))+
+  geom_col(position = "dodge")+
+  scale_x_discrete(limits=c("Sunday", "Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday"))+
+  scale_y_continuous(label = function(x) paste0(x,'K'))+
+  labs(title = 'Trips by Customer Type and Week day', x= NULL, y='Number of trips (k)', fill='Customer Type')+
+  theme_light()
+```
+
+#### Gráfico Duración promedio de trayectos por día de la semana y tipo de usuario
+
+```{r}
+weekday_data %>% ggplot(aes(x=week_day, y= average_duration, fill = customer_type))+
+  geom_col(position = 'dodge')+
+  scale_x_discrete(limits=c("Sunday", "Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday"))+
+  labs(title = 'Average Trip duration by Customer Type and Week day', x=NULL, y= 'Average Trip Duration (minutes)', fill='Customer Type')+
+  theme_light()
+```
+
+#### Gráfico afluencia de usuarios por hora
+
+```{r}
+hour_trip %>% ggplot(aes(x=hour, y=number_of_trips/1000, fill=customer_type))+
+  geom_col(position='dodge')+
+  labs(title = 'Trip hour preferences by Customer Type', x='Hour', y='Number of trips', fill='Customer type')+
+  theme_light()
+```
+
+#### Gráfico Top 5 estaciones más visitadas inicio del trayecto
+
+```{r}
+ggplot(top_start_station, aes(x=number_of_visits, y = fct_reorder(start_station_name,number_of_visits)))+
+  geom_col(aes(fill= start_station_name), show.legend = FALSE)+
+  labs(title = 'Most Visited Start Stations by Casual Users', x ='Number of visits', y =' Station Name')+
+  theme_bw()
+```
+
+#### Gráfica Top 5 estaciones más visitadas final del trayecto
+
+```{r}
+ggplot(top_end_station, aes(x=number_of_visits, y= fct_reorder(end_station_name, number_of_visits)))+
+  geom_col(aes(fill=end_station_name), show.legend = FALSE)+
+  labs(title='Most visited End Stations by Casual Users', x='Number of visits', y= 'Station Name')+
+  theme_bw()
+```
+
+#### Gráfica preferencias por tipo de vehículo
+
+```{r}
+bike_preferences %>% ggplot(aes(x=customer_type, y=number_of_trips/1000, fill= bike_type))+
+  geom_col(position ='dodge')+
+  labs(title = 'Bike Type Preference by Customer Type', x= NULL, y = 'Number of trips', fill= 'Bike Type')+
+  scale_y_continuous(label = function(x) paste0(x,'K'))+
+  scale_fill_manual(values = c('#FFA07A','#66CDAA','#7AC5CD'))+
+  theme_light()
+```
+
+### Conclusiones
+A la fecha, alrededor del 40% de los viajes en Cyclistic es realizado por usuarios casuales y presentan una duración  promedio superior a la de los miembros en aproximadamente 2 minutos. En general se puede decir que se observa un comportamiento similar al de los miembros: baja afluencia de clientes durante primer bimestre del año,  un incremento a partir del mes de marzo y un pico de viajes focalizado durante los meses de junio a agosto y julio - septiembre para usuarios casuales y miembros respectivamente. A diferencia de los miembros, quienes utilizan mayormente el servicio durante los días laborales, los usuarios casuales acuden a Cyclistic con mayor frecuencia los fines de semana. Es necesario acotar que, la duración promedio de los viajes es mayor durante los fines de semana en ambos casos.
+
+Respecto al horario de preferencia para realizar un viaje, se encontró que a partir de las 5: 00 am se presenta un aumento paulatino en el número de usuarios casuales que se acercan a Ciclystic con un pico alrededor de las 5:00 pm. En el caso de los miembros, se observa un pico adicional entre las 7-8:00 am que puede estar asociado con el inicio de la jornada laboral. 
+
+En relación a la preferencia del tipo de vehículo, en el caso de los miembros, se puede inferir que no hay preferencia marcada entre bicicletas clásicas y eléctricas. No así para los usuarios casuales quienes se decantan en su mayoría por bicicletas eléctricas, aunque una pequeña proporción se inclina por bicicletas tipo docked.
+
+En lo que se refiere a las estaciones con mayor afluencia de clientes, se encontró que Streeter Dr & Grand Ave, DuSable Lake Shore Dr & Monroe St, DuSable Lake Shore Dr & North Blv y Michigan Ave & Oak St son las estaciones preferidas por los usuarios casuales tanto para inicio como para finalización del viaje.
+
+### Recomendaciones 
+Para convertir a los usuarios casuales en miembros de Cyclistic, se sugiere abordar a los usuarios durante los fines de semana en especial durante los meses de Junio a Septiembre y enfocar la estrategia en las estaciones con mayor preferencia de acuerdo al análisis realizado. Conservar la oferta de vehículos para usuarios con discapacidad para atacar ese nicho del mercado y ofrecer descuentos especiales en la adquisición de membresías para el uso de este tipo de bicicleta así como para trayectos realizados durante los fines de semana.
