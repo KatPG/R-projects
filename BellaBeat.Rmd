@@ -1,0 +1,345 @@
+---
+title: "Bellabeat- Empresa de tecnologia"
+author: "KatherineParra"
+date: "11 de enero de 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = TRUE, message = FALSE)
+```
+## Escenario
+Bellabeat, una empresa pequena fabricante de productos de alta tecnologia orientados a la salud de la mujer con potencial para convertirse en un actor mas grande en el mercado global de dispositivos inteligentes, te ha pedido que te concentres en uno de sus productos y analices los datos de actividad fisica de los dispositivos  para conocer el uso que hacen los consumidores de los mismos y encontrar nuevas oportunidades de negocio para la empresa. Los hallazgos que descubras ayudaran a orientar la estrategia de marketing de la empresa. 
+
+### Tarea de Negocio
+
+Analizar los datos de uso de los dispositivos inteligentes para saber como usan los consumidores los dispositivos inteligentes que NO son de Bellabeat y posteriormente realizar una compartiva con un producto Bellabeat para aplicar estos conocimientos en la presentacion. 
+
+### Fuente de datos
+
+Datos de seguimiento de actividad fisica de Fitbit (CC0: Dominio publico, conjunto de datos disponibles a traves de Mobius): Este conjunto de datos de Kaggle contiene el seguimiento de la actividad fisica personal en treinta usuarios de Fitbit. Treinta usuarios elegibles de Fitbit prestaron su consentimiento para el envio de datos personales de seguimiento que incluyen rendimiento de la actividad fisica en minutos, ritmo cardiaco y monitoreo del sueñoo. Incluye informacion sobre la actividad diaria, pasos y ritmo cardiaco que se puede usar para explorar los hÃ¡bitos de los usuarios.
+  
+  https://www.kaggle.com/datasets/arashnic/fitbit?resource=download
+  
+#### Descripcion
+
+La data esta compuesta por 18 archivos en formato .csv que corresponden a informacion de la actividad fisica de 33 usuarios de FitBit. Incluye informacion sobre la actividad diaria, pasos y ritmo cardiaco de los usuarios.
+
+## Analisis exploratorio datos usuarios FitBit
+
+### 1. Importar librerias y archivos .csv
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+
+daily_data <- read_csv('dailyActivity_merged.csv', show_col_types = FALSE)
+sleepday_data<-read_csv('sleepDay_merged.csv',show_col_types = FALSE)
+weightLog_data <-read_csv('weightLogInfo_merged.csv', show_col_types = FALSE)
+heartrate_data <-read_csv('heartrate_seconds_merged.csv', show_col_types = FALSE)
+minuteMETsNarrow_data <- read_csv('minuteMETsNarrow_merged.csv', show_col_types = FALSE)
+minuteCaloriesNarrow_data <- read_csv('minuteCaloriesNarrow_merged.csv', show_col_types = FALSE)
+options(scipen = 999)
+
+```
+## 1. Datos diarios 
+### Inspeccion y procesamiento de la data 
+```{r}
+str(daily_data)
+sapply(daily_data, function(x) sum(is.na(x)))
+sapply(daily_data, function(x) n_distinct(x))
+```
+```{r}
+summary(daily_data)
+
+# Seleccion de variables de interes
+daily_data2 <- select(daily_data, Id, ActivityDate, TotalSteps, TotalDistance, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes, Calories)
+
+# Cambio de formato ActivityDate de caracter a Fecha
+daily_data2$ActivityDate <- as.Date(daily_data2$ActivityDate, format('%m/%d/%Y'))
+```
+### Cálculos adicionales
+Estadistica general uso de la aplicaión:
+
+```{r}
+#Estadistica agrupada por fecha
+stat_data <-   daily_data2 %>%
+  group_by(ActivityDate)%>%
+  summarise(Calories_m=mean(Calories),
+            Tsteps_m =mean(TotalSteps),
+            MSedendary_m = mean(SedentaryMinutes),
+            MActive_m =mean(VeryActiveMinutes),
+            MFairlyActive_m = mean(FairlyActiveMinutes),
+            MLightActive_m = mean(LightlyActiveMinutes),
+            Tdistance_m =mean(TotalDistance))
+
+```
+
+Estadistica por Id usuario
+
+```{r}
+#Estadistica agrupada por Id de usuario
+stat_user <- daily_data2 %>%
+  group_by(Id)%>%
+  summarise(Tsteps_m =mean(TotalSteps), Calories_m = mean(Calories))
+
+```
+### Visualizaciones
+
+A partir de los datos de la actividad fisica de los usuarios se plantean visulizaciones que permitan observar cambios en el comportamiento de los usuarios con el transcurrir de los dias en variables como: el total del pasos, el numero de calorias quemadas, la distancia recorrida, tiempo activo y tiempo sedentario.
+
+
+```{r}
+# Número de usuarios de la App por día
+daily_data2 %>% ggplot(aes(ActivityDate))+
+  geom_bar(fill='gray', color='white', width = .5)+
+  scale_x_date(date_labels= '%B-%d', breaks= '4 days')+
+  labs(title = 'Número de usuarios de la App por día', y= 'Número de usuarios', x = 'Fecha')+
+  theme_minimal()
+```
+
+
+```{r}
+# Usuarios con Total pasos diferente de cero
+daily_data2 %>% filter(TotalSteps != 0) %>%
+  ggplot(aes(ActivityDate))+
+  geom_bar(color='white', fill='gray', width = .5)+
+    scale_x_date(date_labels= '%B-%d', breaks= '4 days')+
+  labs(title = 'Número de usuarios que se ejercitan por día', y= 'Número de usuarios', x = 'Fecha')+
+  theme_minimal()
+```
+
+
+```{r}
+#Distribución en cuartiles del tiempo activo y sedentario en minutos
+daily_data2 %>% ggplot() + geom_boxplot(aes(x= VeryActiveMinutes)) + labs(x = 'Tiempo active (min)')
+
+daily_data2 %>% ggplot(aes(x = SedentaryMinutes)) + geom_boxplot() +labs(x = 'Tiempo sedentario (min)')
+```
+Por fecha:
+```{r}
+# Valor medio calorias segun el numero de pasos
+ggplot(stat_data, aes(x=Tsteps_m, y= Calories_m))+
+  geom_point(color = 'blue')+
+  geom_smooth()+
+   labs(title = 'Promedio calorias quemadas por numero de pasos',  x='Numero de pasos', y='Calorias')+
+  ylim(0,2500)+
+  theme_minimal()
+```
+
+
+
+```{r}
+# Número de pasos por tiempo activo
+ggplot(stat_data, aes(x=MActive_m, y= Tsteps_m))+
+  geom_point(na.rm=TRUE)+
+  geom_smooth(na.rm=TRUE, color ='blue') +
+  labs(title = 'Promedio de pasos por tiempo activo', x= 'Minutos', y='Número de pasos') +
+  ylim(0,9000)+
+  theme_minimal()
+
+```
+
+
+Por usuario:
+```{r}
+ggplot(stat_user, aes(x=Tsteps_m, y=Calories_m))+
+  geom_point()+
+  stat_smooth()+
+  labs(title = "Calorias promedio quemadas por usuario de acuerdo al numero de pasos", x ='Numero de pasos', y ='Calorias') +
+  ylim(0,4000)+
+  theme_minimal()
+
+```
+
+
+## 2. Datos sueño diario
+### Inspeccion  y procesamiento de la data
+Solo 24 de los 33 usuarios hacen uso de esta opcion en el aplicativo.
+```{r}
+str(sleepday_data)
+sapply(sleepday_data, function(x) sum(is.na(x)))
+sapply(sleepday_data, function(x) n_distinct(x))
+```
+
+
+```{r}
+#Renombre columna SleeDay a ActivityDate
+sleepday_data2 <- sleepday_data %>%
+  rename(ActivityDate = SleepDay)
+
+#Cambio de formato ActivityDate de caracter a fecha
+
+sleepday_data2$ActivityDate <- as.Date(sleepday_data2$ActivityDate, format = '%m/%d/%Y')
+
+
+#Merge usuarios que monitorean actividad fisica y sueno 
+sleep_daily_merge <- inner_join(daily_data2,sleepday_data2, by=c('Id','ActivityDate'))
+
+sapply(sleep_daily_merge, function(x) n_distinct(x))
+```
+
+### Calculos adicionales
+
+```{r}
+#Estadisticas data agrupadas por Id usuario
+
+stat_sdm_user <- sleep_daily_merge %>%
+  group_by(Id) %>% 
+  summarise(TotalTimeInBed_m = mean(TotalTimeInBed),TotalSteps_m = mean(TotalSteps), Calories_m =mean(Calories), TotalMinutesAsleep_m = mean(TotalMinutesAsleep))
+
+#Estadisticas data agrupadas por fecha
+stat_sdm_date <- sleep_daily_merge %>%
+  group_by(ActivityDate)%>%
+  summarise(TotalTimeInBed_m = mean(TotalTimeInBed),TotalSteps_m = mean(TotalSteps), Calories_m =mean(Calories), TotalMinutesAsleep_m = mean(TotalMinutesAsleep))
+```
+
+### Visualizaciones
+
+```{r}
+#Número de usuarios que monitorean el sueño por día
+ggplot(sleep_daily_merge)+
+  geom_bar(aes(x=ActivityDate), fill= 'gray', width = .5)+
+  labs(title = 'Usuarios que monitorean el sueño por día', x ='Fecha', y='Número de usuarios')+
+  theme_minimal()
+  
+```
+
+```{r}
+#Horas de sueño según número de pasos
+ggplot(stat_sdm_date, aes(x=TotalSteps_m, y= TotalTimeInBed_m/60))+
+  geom_point(color = 'blue')+
+  geom_smooth()+
+  labs(title = 'Horas de sueño según número de pasos', x= 'Total de Pasos', y= 'Horas de Sueño')+
+  ylim(0,9.0)+
+  theme_minimal()
+
+```
+
+## 3. weightLog_data
+### Inspeccion y procesamiento de la data
+Solo 8 de los 33 usuarios hacen uso de esta opcion en el aplicativo.
+```{r}
+str(weightLog_data)
+sapply(weightLog_data, function(x) sum(is.na(x)))
+sapply(weightLog_data, function(x) n_distinct(x))
+```
+```{r}
+#Renombre Columna Date a ActivityDate
+weightLog_data2 <- weightLog_data %>% rename(ActivityDate = Date)
+
+#Cambio de formato ActivityDate de caracter a fecha.
+weightLog_data2$ActivityDate = as.Date(weightLog_data2$ActivityDate, format = '%m/%d/%Y')
+
+#Merge: usuarios que realizan monitorean actividad diaria y peso
+weight_daily_merge <- inner_join(weightLog_data2, daily_data2, by = c('Id', 'ActivityDate'))
+
+```
+
+
+### Visualizaciones
+```{r}
+#Usuarios que monitorean actividad fisica y peso al dia
+weight_daily_merge %>% group_by(ActivityDate)%>%
+  ggplot(aes(x=ActivityDate)) +
+  geom_bar( fill = 'lightgrey', width = .5) +
+  scale_x_date(date_labels = '%B-%d',breaks ='5 days')+
+  labs(title = 'Usuarios que monitorean actividad fisica y peso', x= 'Fecha', y= 'Número de usuarios')+
+  theme_minimal()
+
+```
+
+```{r}
+#Evolucion peso usuarios segun la fecha
+ggplot(weightLog_data2, aes(x= ActivityDate, y= WeightKg, color = as.factor(Id)))+
+  geom_point(shape=5)+
+  geom_line(aes(group=Id))+
+  labs(title = 'Evolucion del peso de usuarios', x= 'Fecha', y= ' Peso (Kg)')+
+  theme_minimal()+
+  theme(legend.position="none")
+  
+```
+
+```{r}
+#Relación monitoreo actividad fisica y tipo de reporte
+weight_daily_merge %>%
+  group_by(ActivityDate) %>%
+  ggplot()+ 
+  geom_col(mapping=aes(y=mean(TotalSteps), x=ActivityDate, fill =IsManualReport))+
+  labs(title = 'Relación actividad fisica -peso y tipo de reporte', x='Fecha', y='Promedio pasos', fill = 'Reporte Manual') +
+  scale_fill_grey()+
+  theme_minimal()
+```
+
+
+### Datos Ritmo cardiaco
+
+#### Inspeccion y procesamiento de la data
+14 usuarios monitorean su ritmo cardiaco
+registo de data cada 5 o 10 segundos
+```{r}
+str(heartrate_data)
+sapply(heartrate_data, function(x) n_distinct(x))
+sapply(heartrate_data, function(x) sum(is.na(x)))
+glimpse(heartrate_data)
+
+#Cambio de formato Time de caracter a fecha
+heartrate_data$Time <- mdy_hms(heartrate_data$Time)
+
+Date <- as.Date(heartrate_data$Time, format = 'm%/%d/%Y')
+
+#Creacion columna hora
+heartrate_data <- heartrate_data %>% 
+  mutate(hour = hour(heartrate_data$Time))
+
+#Creacion columna dia
+heartrate_data <- heartrate_data %>% 
+  mutate(day = day(heartrate_data$Time))
+
+```
+
+#### Visualizaciones
+
+```{r}
+#Monitoreo ritmo cardiaco por fecha
+heartrate_data %>% group_by(as.Date(Time)) %>%
+  ggplot()+
+  geom_bar(aes(x=as.Date(Time)),fill= 'lightgrey', width=.5)+
+  labs(title = 'Monitoreo ritmo cardiaco por fecha', x='Fecha', y='Mediciones')+
+  theme_minimal()
+```
+
+```{r}
+#Ritmo cardiaco promedio por hora 
+heartrate_data %>% group_by(hour) %>%
+  summarise( promrit = mean(Value)) %>% 
+  ggplot(mapping = aes(x =hour, y =promrit))+
+  geom_line(color= 'blue') +
+  scale_x_continuous(breaks = seq(0,24, by=2))+
+  labs(title = 'Ritmo cardiaco promedio durante el día', x='Hora', y =' Ritmo cardiaco')+
+  ylim(0,100)+
+  theme_minimal()
+```
+
+
+### CONCLUSIONES
+
+A partir de la información proporcionada por 33 usuarios de la aplicación, se puede de deducir que el monitoreo diario del número de pasos y el tiempo de actividad es la opción más utilizada dentro de las ofrecidas por la aplicacion. Sin embargo, aúnque puede estar relacionada con la forma como se recopilan los datos en el dispositivo, el número de usuarios que hacen  uso de este módulo decrese paulatinamente hasta 22, de los cuales solo 17 realizan actividad fisica al final del tiempo de monitoreo.Asi pues, el registro diario no implica que el usuario este realizando actividad fisica. En terminos generales se puede inferir que las calorias quemadas por los usuarios tienen una relación directamente proporcional con el numero de pasos dados y el tiempo de actividad fisica de los mismos. En este sentido, se encontro que el tiempo activo presenta una distribucion con asimetria positiva donde el 75% de los datos indica actividad fisica inferior o igual a 32 minutos con una media de 4 minutos. Asi mismo, con una disribución de asimetria negativa, la tercera parte de los usuarios presenta un tiempo sedentario de hasta 1230 minutos con una media de 991 minutos.
+
+En relación al tiempo de sueño, no se encontró relación directa entre la actividad física realizada por el usuario en terminos de pasos o distancia recorrida con las horas de sueño de 24 de los 33 usuarios que hacen parte del estudio y monitorean sus niveles de sueño con el aplicativo.
+
+En lo que respecta al monitoreo del peso, solo se cuenta con datos de 8 usuarios, es decir, está opción podria ser una de las menos populares en la aplicación. Tan solo 2 de los 8 usuarios realizan un monitoreo regular y no se encontro evidencia de cambios significativos en su peso durante el tiempo de monitoreo. Por otro lado, dentro del aplicativo, esta es la unica opcion que ofrece la posibilidad de hacer el reporte de forma manual o automatica, asi pues, se encontro que a medida que aumenta el tiempo de actividad fisica / pasos dados, los usuarios se inclinan por el reporte automatico.
+
+Finalmente, a partir de los datos proporcionados, se establecio que 17 de los 33 usuarios que hacen parte del estudio, monitorean su ritmo cardiaco. Sin embargo, el número de mediciones capturadas varia sin tendencia definida con el pasar de los dias, aspecto que podria ser atribuido a las diferencias en los tiempos de captura manejados por el aplicativo, 5 y 10 segundos.
+
+Recomendaciones: 
+Establecer por defecto la captura de datos automatica para todas las opciones de acuerdo al programa establecido por el usuario en relacion a sus objetivos con el uso de dispositivo.
+
+Ofrecer informes periodicos donde se presente el progreso del usuario junto con recomendaciones para ajustar los resultados del programa a sus objetivos particulares.
+
+En relacion al monitoreo del ritmo cardiaco, establer un periodo fijo para la captura de la información que sea de utilidad para crear alertas y formular recomendaciones.
+
+Implementar recordatorios para motivar al usuario a realizar actividad fisica. 
